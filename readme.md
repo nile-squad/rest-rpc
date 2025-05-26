@@ -2,6 +2,8 @@
 
 This document provides a complete overview of the "REST-RPC" API architecture implementation, a hybrid approach that centralizes service operations while maintaining REST-like discoverability.
 
+Mostly useful for micro services that don't want to leave rest api land and backend for frontend systems (BFF) and service oriented designs or event driven systems. But see the when not to use section as well.
+
 ## 1. Introduction to "REST-RPC"
 
 The "REST-RPC" architecture implemented here is a service-oriented approach that organizes APIs around **services** rather than resources. Each service exposes multiple **actions** through a standardized interface, combining the discoverability of REST with the explicit operation naming of RPC.
