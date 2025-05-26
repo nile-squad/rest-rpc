@@ -1,4 +1,4 @@
-# The "REST-RPC" Architecture - Implementation Guide
+# The "REST-RPC" Architecture - Implementation Guide - Current Draft
 
 This document provides a complete overview of the "REST-RPC" API architecture implementation, a hybrid approach that centralizes service operations while maintaining REST-like discoverability.
 
@@ -16,7 +16,7 @@ The "REST-RPC" architecture implemented here is a service-oriented approach that
 
 ### 2.2 URL Structure
 
-```
+```plaintext
 {baseUrl}/{apiVersion}/services/{serviceName}
 ```
 
@@ -33,7 +33,7 @@ Example: `https://api.example.com/v1/services/users`
 
 All service actions use POST with this standardized body:
 
-```json
+```js
 {
   "resourceId": "optional_resource_identifier",
   "action": "action_name",
@@ -47,7 +47,7 @@ All service actions use POST with this standardized body:
 
 All responses follow this format:
 
-```json
+```js
 {
   "status": true|false,
   "message": "Descriptive message",
@@ -59,13 +59,13 @@ All responses follow this format:
 
 ### 4.1 List All Services
 
-```http
+```plaintext
 GET {baseUrl}/{apiVersion}/services
 ```
 
 **Response:**
 
-```json
+```js
 {
   "status": true,
   "message": "List of all available services on ServerName.",
@@ -75,13 +75,13 @@ GET {baseUrl}/{apiVersion}/services
 
 ### 4.2 Service Details
 
-```http
+```plaintext
 GET {baseUrl}/{apiVersion}/services/{serviceName}
 ```
 
 **Response:**
 
-```json
+```js
 {
   "status": true,
   "message": "Service Details",
@@ -95,13 +95,13 @@ GET {baseUrl}/{apiVersion}/services/{serviceName}
 
 ### 4.3 Action Details
 
-```http
+```plaintext
 GET {baseUrl}/{apiVersion}/services/{serviceName}/{actionName}
 ```
 
 **Response:**
 
-```json
+```js
 {
   "status": true,
   "message": "Action Details",
@@ -117,13 +117,13 @@ GET {baseUrl}/{apiVersion}/services/{serviceName}/{actionName}
 
 ### 4.4 Complete Schema Documentation
 
-```http
+```plaintext
 GET {baseUrl}/{apiVersion}/services/schema
 ```
 
 **Response:**
 
-```json
+```js
 {
   "status": true,
   "message": "ServerName Services actions zod Schemas",
@@ -462,3 +462,4 @@ This is still an experimental architecture, only tested with implementation of h
 This architecture is still experimental and subject to change. So contributions, criticism and feedback are welcome.
 
 Created by [Hussein Kizz](https://github.com/Hussseinkizz) at Nile Squad Labz. Completely open source under MIT License and used in production.
+
