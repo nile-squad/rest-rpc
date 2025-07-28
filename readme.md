@@ -1,604 +1,462 @@
-# The "REST-RPC" Architecture - Implementation Guide - Current Draft
+# REST-RPC Specification
 
-This document provides a complete overview of the "REST-RPC" API architecture implementation, a hybrid approach that centralizes service operations while maintaining REST-like discoverability.
+**Version:** Draft v3
+**Date:** July 26, 2025
+**Author:** Hussein Kizz
 
-Mostly useful for micro services that don't want to leave rest api land and backend for frontend systems (BFF) and service oriented designs or event driven systems. But see the when not to use section as well and the Question and Answer Section too!
+---
 
-## 1. Introduction to "REST-RPC"
+## Summary
 
-The "REST-RPC" architecture implemented here is a service-oriented approach that organizes APIs around **services** rather than resources. Each service exposes multiple **actions** through a standardized interface, combining the discoverability of REST with the explicit operation naming of RPC.
+This specification outlines the REST-RPC architecture, covering the following key areas:
 
-## 2. Core Architecture
+* **Introduction:** The core philosophy and goals of the REST-RPC pattern.
+* **Core Concepts:** The main ideas behind the service-oriented and self-documenting architecture.
+* **Protocol:** The technical details of the interaction model, broken down into:
 
-### 2.1 Service-Based Organization
+  * **Service Discovery (`GET /.../services`)**
+  * **Service Exploration (`GET /.../services/{serviceName}`)**
+  * **Action Exploration (`GET /.../services/{serviceName}/{actionName}`)**
+  * **Authentication**
+  * **Action Invocation (`POST /.../services/{serviceName}`)**
+  * **Schema Endpoint (`GET /.../services/schema`)**
 
-- APIs are organized around **services** (e.g., `users`, `products`, `orders`)
-- Each service contains multiple **actions** (e.g., `create`, `update`, `delete`, `login`)
-- Services can be manually defined or auto-generated from database schemas
+## 1. Introduction
 
-### 2.2 URL Structure
+REST-RPC is a hybrid architecture borrowing from REST (Representational State Transfer) and RPC (Remote Procedure Call) architectural styles to enable stateless communication between microservices, systems, or servers and frontends. It is highly opinionated and follows a strict but predictable design with simple principles that are flexible enough to allow for any kind of scaling and complexity.
 
-```plaintext
-{baseUrl}/{apiVersion}/services/{serviceName}
+## 2. Core Concepts
+
+At its core, REST-RPC is service and service-action oriented. It uses `GET` requests for discoverability or exploration of available services and `POST` requests to invoke actions on a given service.
+
+All requests and responses follow the same predictable structure to reduce overhead in integration and interaction with the exposed services. Only the `GET` and `POST` HTTP methods are used; `PUT`, `PATCH`, `DELETE`, and other methods are not part of this specification.
+
+* **`POST` requests** are used to execute actions and can accept payloads as `application/json`.
+* **`GET` requests** are used to explore the API's available services and their structure, enabling a self-documenting behavior. This allows developers and even AI agents to learn the API on the fly using simple tools like `curl` or any other HTTP client, eliminating the need for external documentation tools like Swagger.
+
+## 3. Protocol
+
+### 3.1. Service Discovery
+
+#### 3.1.1. Request
+
+A `GET` request is made to the `/services` endpoint. The URL has a specific anatomy:
+
+`/{baseURL}/{apiVersion}/services`
+
+* **`baseURL`**: The base path for the API (e.g., `/api`, `/testing/api`).
+* **`apiVersion`**: The version of the API (e.g., `v1`, `v2`).
+
+**Example:**
+
+```bash
+curl localhost:9000/testing/api/v1/services
 ```
 
-Example: `https://api.example.com/v1/services/users`
+#### 3.1.2. Response
 
-### 2.3 HTTP Methods
+The server responds with a standard JSON object with the following keys:
 
-- **`GET`**: Service discovery and documentation
-- **`POST`**: Action execution
+* **`status`**: A boolean that is `true` on success and `false` on failure.
+* **`message`**: A string containing a descriptive message about the outcome.
+* **`data`**: On success, this holds an array of strings, where each string is an available service name. On failure, this is typically `null` or empty. It may optionally contain an object with an `error_id` for tracing purposes. The `error_id` is a unique 6-character code or a UUID.
 
-## 3. Request/Response Format
+**Example Success Response:**
 
-### 3.1 POST Request Structure
-
-All service actions use POST with this standardized body:
-
-```js
+```json
 {
-  "resourceId": "optional_resource_identifier",
-  "action": "action_name",
-  "payload": {
-    // Action-specific data
+  "status": true,
+  "message": "List of all available services on 3M Testing Server.",
+  "data": [
+    "data-service",
+    "todos",
+    "users"
+  ]
+}
+```
+
+**Example Error Response (Simple):**
+
+```json
+{
+  "status": false,
+  "message": "An error occurred while fetching services.",
+  "data": null
+}
+```
+
+**Example Error Response (With Trace ID):**
+
+```json
+{
+  "status": false,
+  "message": "An error occurred while fetching services.",
+  "data": {
+    "error_id": "a7b3c9"
   }
 }
 ```
 
-### 3.2 Response Structure
+### 3.2. Service Exploration
 
-All responses follow this format:
+#### 3.2.1. Request
 
-```js
-{
-  "status": true|false,
-  "message": "Descriptive message",
-  "data": { /* Response data */ }
-}
+A `GET` request is made to a specific service's endpoint:
+
+`/{baseURL}/{apiVersion}/services/{serviceName}`
+
+* **`serviceName`**: The name of the service to explore (e.g., `todos`).
+
+**Example:**
+
+```bash
+curl localhost:9000/testing/api/v1/services/todos
 ```
 
-## 4. Service Discovery Endpoints
+#### 3.2.2. Response
 
-### 4.1 List All Services
+The server responds with the standard JSON structure. On success, the `data` object contains details about the requested service.
 
-```plaintext
-GET {baseUrl}/{apiVersion}/services
-```
+* **`name`**: The name of the service.
+* **`description`**: A human-readable description of the service's purpose.
+* **`availableActions`**: An array of strings, where each string is an action that can be invoked on this service.
 
-**Response:**
+**Example Success Response:**
 
-```js
-{
-  "status": true,
-  "message": "List of all available services on ServerName.",
-  "data": ["users", "products", "orders"]
-}
-```
-
-### 4.2 Service Details
-
-```plaintext
-GET {baseUrl}/{apiVersion}/services/{serviceName}
-```
-
-**Response:**
-
-```js
+```json
 {
   "status": true,
   "message": "Service Details",
   "data": {
-    "name": "users",
-    "description": "User management service",
-    "availableActions": ["create", "login", "updateProfile", "delete"]
+    "name": "todos",
+    "description": "todos service",
+    "availableActions": [
+      "create",
+      "getAll",
+      "getOne",
+      "update",
+      "delete",
+      "getEvery"
+    ]
   }
 }
 ```
 
-### 4.3 Action Details
+### 3.3. Action Exploration
 
-```plaintext
-GET {baseUrl}/{apiVersion}/services/{serviceName}/{actionName}
+#### 3.3.1. Request
+
+A `GET` request is made to a specific action's endpoint:
+
+`/{baseURL}/{apiVersion}/services/{serviceName}/{actionName}`
+
+* **`actionName`**: The name of the action to explore (e.g., `create`).
+
+**Example:**
+
+```bash
+curl localhost:9000/testing/api/v1/services/todos/create
 ```
 
-**Response:**
+#### 3.3.2. Response
 
-```js
+The server responds with the standard JSON structure. On success, the `data` object contains details about the requested action.
+
+* **`name`**: The name of the action.
+* **`description`**: A human-readable description of what the action does.
+* **`isProtected`**: A boolean indicating whether the action requires authentication or special authorization to execute.
+* **`validation`**: An object that describes the expected payload for the action. This schema should be consistent and clearly define what fields are required, their types, and any other constraints. While the example below uses JSON Schema, any consistent and descriptive format can be used.
+
+**Example Success Response:**
+
+```json
 {
   "status": true,
   "message": "Action Details",
   "data": {
     "name": "create",
-    "description": "Creates a new user account",
+    "description": "Create a new record in todos",
+    "isProtected": false,
     "validation": {
-      /* JSON Schema for payload validation */
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "user_id": { "type": "string", "format": "uuid" }
+      },
+      "required": ["title", "user_id"]
     }
   }
 }
 ```
 
-### 4.4 Complete Schema Documentation
+### 3.4. Authentication
 
-```plaintext
-GET {baseUrl}/{apiVersion}/services/schema
+If an action is marked as protected (`"isProtected": true`), the client MUST include an `Authorization` header in the request. The most common method is using a Bearer token.
+
+* **Header:** `Authorization: Bearer <token>`
+
+Any other standard auth methods are also allowed. The Bearer token is only required if the action is protected, as seen during Action Exploration.
+
+Tokens are typically obtained by interacting with a dedicated `auth` service, which would expose actions like `login`, `signup`, or `refreshToken`.
+
+### 3.5. Action Invocation
+
+To execute an action on a service, the client sends a `POST` request to the service's endpoint.
+
+#### 3.5.1. Request
+
+* **Method:** `POST`
+* **URL:** `/{baseURL}/{apiVersion}/services/{serviceName}`
+* **Headers:**
+
+  * `Content-Type`: MUST be `application/json`.
+  * `Authorization`: Required if the action is protected (e.g., `Bearer <token>`).
+* **Body:** The request body is a JSON object containing the action to be executed and its corresponding payload.
+
+```json
+{
+  "action": "actionName",
+  "payload": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
 ```
 
-**Response:**
+* **`action`**: The name of the action to invoke (e.g., `update`).
+* **`payload`**: An object containing the data required for the action. The structure of this payload should match the validation schema discovered via Action Exploration.
 
-```js
+**Example `curl` Request:**
+
+```bash
+curl -X POST \
+  localhost:9000/testing/api/v1/services/todos \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your_jwt_token>" \
+  -d '{
+        "action": "update",
+        "payload": {
+          "todo_id": "some_todo_uuid",
+          "completed": true
+        }
+      }'
+```
+
+#### 3.5.2. Response
+
+The server responds with the standard JSON structure (`status`, `message`, `data`).
+
+* On success, the `data` field contains the result of the action. This could be the created or updated resource, a confirmation message, or be `null` if no specific data needs to be returned.
+* On failure (e.g., validation error, unauthorized access), the `status` will be `false`, and the `message` will contain a descriptive error.
+
+**Example Success Response:**
+
+```json
 {
   "status": true,
-  "message": "ServerName Services actions zod Schemas",
+  "message": "Todo updated successfully.",
+  "data": {
+    "todo_id": "some_todo_uuid",
+    "title": "My Updated Todo",
+    "completed": true,
+    "user_id": "some_user_uuid"
+  }
+}
+```
+
+**Example Error Response:**
+
+```json
+{
+  "status": false,
+  "message": "Todo not found.",
+  "data": null
+}
+```
+
+#### 3.5.3. Validation Errors
+
+When the client’s request payload fails validation:
+
+* **`status`**: `false`
+* **`message`**: `invalid request format`
+* **`data`**: An object detailing any missing or malformed fields.
+* For `multipart/form-data` is also accepted on top of JSON, and with it still we pass `action` name and then `file` or `files` in form fields.
+* Pagination and filtering that can be passed in payload.
+* Versioning though not so much needed in this case since new actions can just be added into a services without removing old ones or breaking anything but for any thing a new version can be exposed under new version eg from v1 to v2 and both can be run in parallel yes.
+
+**Example Validation Failure Response:**
+
+```json
+{
+  "status": false,
+  "message": "invalid request format",
+  "data": {
+    "missing": ["user_id", "title"],
+    "invalid": {
+      "due_date": "must be a valid ISO date string"
+    }
+  }
+}
+```
+
+### 3.6. Schema Endpoint
+
+For client-side type generation, tooling, or documentation, a single endpoint can be used to retrieve the entire API schema, including all services and their actions.
+
+#### 3.6.1. Request
+
+A `GET` request is made to the `/schema` endpoint.
+
+`/{baseURL}/{apiVersion}/services/schema`
+
+**Example:**
+
+```bash
+curl localhost:9000/testing/api/v1/services/schema
+```
+
+#### 3.6.2. Response
+
+The server responds with the standard JSON structure. On success, the `data` field contains an array of all services. Each service object in the array contains a list of its actions and their corresponding validation schemas.
+
+This provides a complete, machine-readable definition of the entire API surface, which is invaluable for building type-safe clients and other integrations.
+
+**Example Success Response (truncated for brevity):**
+
+```json
+{
+  "status": true,
+  "message": "3M Testing Server Services actions zod Schemas",
   "data": [
     {
-      "users": [
+      "data-service": [
+        { "name": "greet", "description": "...", "validation": null }
+      ]
+    },
+    {
+      "todos": [
         {
           "name": "create",
-          "description": "Creates a new user",
-          "validation": { /* JSON Schema */ }
-        }
+          "description": "...",
+          "validation": { "$schema": "...", "type": "object", "..." }
+        },
+        { "name": "getAll", "description": "...", "validation": null }
       ]
     }
   ]
 }
 ```
 
-## 5. Configuration and Setup
+### 3.7. Pagination & Filtering
 
-### 5.1 Server Configuration
+Clients that need to page through large result sets or apply filters include pagination and filtering parameters inside the `payload` of their action invocation.
 
-```typescript
-import { useRestRPC } from './rest-rpc';
+#### Conventions
 
-const config: ServerConfig = {
-  serverName: "My API Server",
-  baseUrl: "/api",
-  apiVersion: "v1",
-  host: "0.0.0.0",
-  port: "8000",
-  services: [/* service definitions */],
-  db: {
-    instance: dbInstance,
-    tables: dbTables
-  }
-};
+Inside the `payload`:
 
-const app = useRestRPC(config);
-```
+* **`page`**: The 1‑based page number to retrieve.
+* **`perPage`**: The number of items per page.
+* **`filters`**: An object whose keys are field names and values are filter criteria (e.g., `{ "status": "active" }`).
+* **`sort`** (optional): An array of `{ field: string, direction: "asc" | "desc" }` objects.
 
-### 5.2 Service Definition Structure
+#### Example
 
-```typescript
-type Service = {
-  name: string;
-  description: string;
-  actions: Action[];
-  autoService?: boolean; // Enable auto-generation
-  subs?: Service[]; // Sub-services for auto-generation
-};
-
-type Action = {
-  name: string;
-  description: string;
-  validation?: {
-    zodSchema: ZodSchema;
-  };
-  isProtected?: boolean; // Requires authentication
-  handler: (payload: any, context: HonoContext) => Promise<ActionResponse>;
-};
-
-type ActionResponse = {
-  status: boolean;
-  message: string;
-  data: any;
-};
-```
-
-**Handler Consistency Requirements:**
-
-All action handlers must:
-- Accept exactly two parameters: `(payload, context)`
-- Return a Promise that resolves to an `ActionResponse` object
-- Follow the standardized response format with `status`, `message`, and `data` fields
-- Handle errors gracefully and return error responses in the same format
-
-This ensures consistency across all actions at scale and predictability across teams.
-
-## 6. Authentication
-
-### 6.1 Protected Actions
-
-Actions marked with `isProtected: true` require authentication:
-
-```http
-POST /api/v1/services/users
-Authorization: Bearer <some-token>
-Content-Type: application/json
-
+```json
 {
-  "action": "updateProfile",
+  "action": "getAll",
   "payload": {
-    "name": "New Name"
+    "page": 2,
+    "perPage": 25,
+    "filters": {
+      "user_id": "some_user_uuid",
+      "status": "completed"
+    },
+    "sort": [
+      { "field": "created_at", "direction": "desc" }
+    ]
   }
 }
 ```
 
-### 6.2 Authentication Flow
+The response’s `data` field will include:
 
-1. Client includes `Authorization: Bearer <token>` header
-2. Server verifies token before invoking action
-3. Invalid/missing tokens return 401 Unauthorized
+* **`items`**: An array of the requested resources.
+* **`meta`**: An object with `totalItems`, `totalPages`, `currentPage`, and `perPage`.
 
-## 7. Auto-Generated Services
-
-### 7.1 Database Integration
-
-Services can be auto-generated from database schemas:
-
-```typescript
-const service: Service = {
-  name: "users",
-  description: "User management",
-  autoService: true,
-  actions: [], // Manual actions
-  subs: [
-    {
-      name: "profiles",
-      description: "User profiles",
-      actions: [] // Will be auto-generated but supplemental actions can also be provided
+```json
+{
+  "status": true,
+  "message": "Fetched page 2 of todos.",
+  "data": {
+    "items": [ /* … */ ],
+    "meta": {
+      "totalItems": 102,
+      "totalPages": 5,
+      "currentPage": 2,
+      "perPage": 25
     }
-  ]
-};
-```
-
-### 7.2 Generated Actions
-
-Auto-services typically generate standard CRUD operations:
-
-- `create` - Create new records
-- `read` - Retrieve records
-- `update` - Update existing records
-- `delete` - Delete records
-- `list` - List records with pagination/filtering
-
-## 8. Error Handling and Validation
-
-### 8.1 Validation Errors
-
-When payload validation fails:
-
-```json
-{
-  "status": false,
-  "message": "Invalid request format",
-  "data": {
-    "field": "email",
-    "message": "Invalid email format",
-    "code": "VALIDATION_ERROR"
   }
 }
 ```
 
-### 8.2 Action Not Found
+### 3.8. Versioning
 
-When requesting a non-existent action:
+By default, adding new actions or services under the same API version (e.g., `v1`) is non‑breaking. If a breaking change is ever required—or you want to run two schemas side‑by‑side—introduce a new version segment and expose the updated surface there.
 
-```json
-{
-  "status": false,
-  "message": "Action 'invalidAction' not found in service 'users'",
-  "data": {
-    "availableActions": ["create", "login", "updateProfile", "delete"],
-    "code": "ACTION_NOT_FOUND"
-  }
-}
-```
+#### Strategy
 
-### 8.3 Authentication Errors
+1. **Non‑breaking additions** (e.g., new actions) go into the current version.
+2. **Breaking changes** (e.g., renaming payload fields, changing response shapes) require a new version, e.g., `/v2`.
+3. Both versions remain available in parallel until clients migrate.
 
-When authentication fails:
+#### Example
 
-```json
-{
-  "status": false,
-  "message": "Unauthorized",
-  "data": {
-    "code": "UNAUTHORIZED",
-    "reason": "Invalid or missing token"
-  }
-}
-```
+* **v1 endpoint:**
 
-### 8.4 Server Errors
+  ```
+  POST /api/v1/services/todos
+  ```
+* **v2 endpoint with changed `dueDate` field name:**
 
-When internal errors occur:
+  ```
+  POST /api/v2/services/todos
+  ```
 
-```json
-{
-  "status": false,
-  "message": "Internal server error",
-  "data": {
-    "code": "INTERNAL_ERROR",
-    "requestId": "req_123456789"
-  }
-}
-```
+Clients choose which version to call via the URL segment; no headers or query‑params are used.
 
-### 8.5 Business Logic Errors
+---
 
-When business rules are violated:
+## 4. When to Use This Architecture?
 
-```json
-{
-  "status": false,
-  "message": "Insufficient balance for transaction",
-  "data": {
-    "code": "BUSINESS_RULE_VIOLATION",
-    "currentBalance": 50.00,
-    "requiredAmount": 100.00
-  }
-}
-```
+**Consider To Use This For:**
 
-**Error Handling Patterns:**
-
-- All errors follow the same response structure
-- Include error codes for programmatic handling
-- Provide contextual information in the `data` field
-- Use descriptive messages for debugging
-- Maintain consistent error categorization across services
-
-## 9. Example Implementation
-
-### 9.1 Complete Service Example
-
-```typescript
-const userService: Service = {
-  name: "users",
-  description: "User management service",
-  actions: [
-    {
-      name: "create",
-      description: "Create a new user account",
-      validation: {
-        zodSchema: z.object({
-          email: z.string().email(),
-          password: z.string().min(8),
-          name: z.string()
-        })
-      },
-      handler: async (payload, context) => {
-        try {
-          // Business logic here
-          const user = await createUser(payload);
-          
-          return {
-            status: true,
-            message: "User created successfully",
-            data: { id: user.id, email: user.email }
-          };
-        } catch (error) {
-          return {
-            status: false,
-            message: "Failed to create user",
-            data: { 
-              code: "USER_CREATION_FAILED",
-              reason: error.message 
-            }
-          };
-        }
-      }
-    }
-  ]
-};
-```
-
-### 9.2 Client Usage Example
-
-```javascript
-// Create user
-const response = await fetch('/api/v1/services/users', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    action: 'create',
-    payload: {
-      email: 'user@example.com',
-      password: 'password123',
-      name: 'John Doe'
-    }
-  })
-});
-
-const result = await response.json();
-if (result.status) {
-  console.log('User created:', result.data);
-} else {
-  console.error('Error:', result.message, result.data);
-}
-```
-
-## 10. Benefits of This Implementation
-
-1. **Centralized Action Handling**: All service operations go through a single endpoint
-2. **Strong Typing**: Zod schema validation with automatic JSON Schema generation
-3. **Auto-Discovery**: Complete API documentation available at runtime
-4. **Flexible Authentication**: Per-action authentication control
-5. **Auto-Generation**: Database-driven service generation (optional)
-6. **Standardized Responses**: Consistent error handling and response format
-7. **Standardized Request Format**: Consistent request structure for all services
-8. **Handler Consistency**: Predictable action handler interface across all services
-
-## 11. When to Use This Architecture
-
-**Ideal For:**
-
-- Microservices with complex business logic
-- APIs requiring strong validation and documentation
-- Systems needing flexible authentication per operation
-- Applications with needs beyond database-driven CRUD operations
-- Internal APIs where explicit action naming improves clarity
+* Microservices with complex business logic
+* APIs requiring strong validation and documentation
+* Systems needing flexible authentication per operation
+* Applications with needs beyond database-driven CRUD operations
+* Internal APIs where explicit action naming improves clarity
+* AI or agent driven development and spec driven development workflows
 
 **Consider Alternatives When:**
 
-- Building simple REST APIs with standard CRUD operations
-- Public APIs where REST conventions are expected
-- Systems requiring HTTP method-based caching strategies
-- Applications needing hypermedia-driven discovery (HATEOAS)
+* Building simple REST APIs with standard CRUD operations
+* Public APIs where REST conventions are expected
+* Systems requiring HTTP method-based caching strategies
+* Applications needing hypermedia-driven discovery (HATEOAS)
 
-This implementation provides a robust, scalable foundation for service-oriented APIs with excellent developer experience through comprehensive documentation and validation.
+However otherwise this implementation provides a robust, scalable foundation for service-oriented APIs with excellent developer experience through comprehensive documentation and validation and no surprises.
 
-But if you're not convinced yet, for these concerns... consider:
+## 5. Frequently Asked Questions
 
-## 12. Frequently Asked Questions
+If you still have questions or need more explanations, you can check out some I have answered already, see [commonly asked questions](./rest-rpc.spec.faq.md)
 
-### 12.1 Architecture Decisions
+## 6. License & Contributing
 
-**Q: Why not use GraphQL instead?**
+This architecture can be implemented in any language following the same protocols. Currently, it is implemented in the `Nile` framework used internally at Nile Squad Labz under the `@nile-squad/nile` package. The idea is transferable and can also work with other protocols like WebSockets following the same principles.
 
-A: While I appreciate GraphQL's power, I found it introduces too much learning curve for my frontend teams who are already productive with REST patterns. GraphQL requires learning query syntax, new tooling, different error handling, and complex caching strategies. My REST-RPC approach lets teams keep using familiar `fetch()` calls while still getting explicit operations and strong typing. Sometimes the path of least resistance is the right path.
-
-**Q: Why not use tRPC for type safety?**
-
-A: I actually love tRPC's type safety, but it forces you into a monorepo or complex type-sharing setup. Since I work with separate frontend/backend repositories (which is pretty common in enterprise), tRPC's main benefits disappear while adding infrastructure complexity. I wanted the type safety without the coupling, which is why I'm planning client magic using our Zod schemas - think tRPC-like inference without the monorepo requirement.
-
-**Q: Why not stick to pure REST principles?**
-
-A: I tried, but enterprise business logic just doesn't fit cleanly into HTTP verbs. When I have operations like `calculateShipping`, `processPayment`, or `generateReport`, forcing these into PUT/POST feels artificial. I'd rather be explicit about what the operation does than pretend it's a resource update. Business clarity trumps HTTP purity for internal systems.
-
-**Q: Doesn't this violate HTTP semantics by using POST for everything?**
-
-A: Absolutely, and I'm okay with that trade-off. I prioritize business clarity and consistent patterns over semantic correctness. For internal enterprise APIs where I control both ends, the benefits of explicit actions outweigh the loss of HTTP-level caching. I can always add caching at the application layer where it makes more sense anyway.
-
-### 12.2 Standards and Conventions
-
-**Q: How does this compare to JSON-RPC or other RPC standards?**
-
-A: I borrowed from RPC concepts but kept REST-like discoverability because I wanted the best of both worlds:
-
-| Feature       | JSON-RPC        | My REST-RPC                         | Traditional REST         |
-| ------------- | --------------- | ----------------------------------- | ------------------------ |
-| Discovery     | External docs   | Built-in `/services` endpoints      | HATEOAS (rarely works)   |
-| HTTP Methods  | POST only       | GET for discovery, POST for actions | Full HTTP verb semantics |
-| URL Structure | Single endpoint | Service-based endpoints             | Resource-based endpoints |
-| Validation    | Manual          | Auto-generated from Zod schemas     | Manual or OpenAPI        |
-
-**Q: What about OpenAPI/Swagger compatibility?**
-
-A: I'm planning to add Swagger support in future versions, but honestly, I don't think it's as critical here. My `/services/schema` endpoint already provides machine-readable API docs, and since everything follows the same action pattern, there's less need for detailed endpoint documentation. When I do add Swagger, it'll focus on service/action details rather than trying to map everything to traditional REST patterns.
-
-**Q: How do you handle caching without proper HTTP verbs?**
-
-A: For enterprise internal APIs, I rely on application-level caching strategies - Redis, database query optimization, service-level caching. HTTP-level caching is often overrated for complex business logic anyway. Most enterprise operations involve multiple data sources and complex calculations that don't cache well at the HTTP layer.
-
-**Q: Is this approach RESTful?**
-
-A: Nope, not in the strict sense, and I'm not pretending it is. I violate the uniform interface constraint by not using HTTP verbs semantically. I call it "REST-RPC" because it borrows REST's discoverability while using RPC's explicit operations. It's a hybrid that works for my use cases, not a pure implementation of either.
-
-### 12.3 Implementation Concerns
-
-**Q: How do you handle idempotency without PUT/DELETE?**
-
-A: I handle idempotency at the application level using the `resourceId` + `action` combination for deduplication, idempotency keys in payloads when needed, and database constraints. It's actually cleaner than trying to force business operations into HTTP verb semantics that don't quite fit.
-
-**Q: What about performance and scalability?**
-
-A: For internal enterprise APIs, I've found that business logic is usually the bottleneck, not HTTP routing. Single endpoints per service actually simplify load balancing, and I can scale services independently. The auto-generation features optimize for development speed over performance for basic crud, which is the right trade-off for most enterprise scenarios.
-
-**Q: How do you version this API?**
-
-A: I use multiple strategies:
-
-- URL versioning for major changes: `/api/v1/services/users` → `/api/v2/services/users`
-- Action evolution: Add new actions, deprecate old ones gradually
-- Payload evolution: Add optional fields, maintain backward compatibility
-- Service splitting: Break large services into focused ones
-
-The action-based approach actually makes versioning easier since I can add new actions without breaking existing ones.
-
-**Q: What about testing and mocking?**
-
-A: The consistent request/response format actually makes testing simpler. One POST endpoint per service reduces mock complexity, standardized responses enable generic error handling, and action-based testing makes business logic cleaner to test. I can mock entire services with a single endpoint handler.
-
-### 12.4 Future Plans and Framework Development
-
-**Q: You mentioned client magic - what's that about?**
-
-A: I'm working on client libraries that use the Zod schemas from `/services/schema` to provide tRPC-like type inference without monorepo coupling. Imagine getting full TypeScript autocomplete and validation on your frontend just by pointing to the schema endpoint - and some codegen magic, It's like having your cake and eating it too.
-
-**Q: What about action effects and scheduling?**
-
-A: I'm planning to add action effects (like triggering other actions after completion) and action scheduling (cron-like scheduling for actions). The action-based architecture makes these features natural extensions. Think of it as building a workflow engine on top of the service layer.
-
-**Q: Any plans for real-time features?**
-
-A: I'm considering WebSocket support for action subscriptions - imagine subscribing to action results or getting real-time updates when certain actions complete. The service/action model maps well to event-driven architectures.
-
-**Q: Is this becoming a full framework?**
-
-A: Absolutely! I'm working on turning this into a complete framework that teams can adopt without having to rebuild everything from scratch. The goal is to package all the patterns, tooling, and best practices I've developed into something that maintains the same quality and developer experience regardless of who implements it.
-
-The framework will include:
-
-- **CLI tools** for scaffolding new services and actions
-- **Code generators** for common patterns (CRUD, auth, validation)
-- **Client libraries** for multiple languages (TypeScript, Python, Go, Rust, etc)
-- **Development tools** like service explorers and testing utilities
-- **Deployment templates** for common platforms (Docker, Kubernetes, serverless)
-- **Monitoring and observability** built-in from day one
-
-**Q: How will you ensure quality doesn't degrade as it becomes a framework?**
-
-A: I'm taking a few approaches to maintain quality:
-
-1. **Battle-tested patterns**: Everything in the framework comes from real production usage, not theoretical ideals
-2. **Comprehensive testing**: The framework will have extensive test suites and real-world validation
-3. **Gradual rollout**: I'm starting with internal teams before open-sourcing, so I can catch issues early
-4. **Strong defaults**: The framework will be opinionated about the right way to do things, reducing the chance for quality degradation
-5. **Continuous dogfooding**: I'll keep using it for my own projects, so I'll feel the pain if quality drops
-
-**Q: When will this framework be available?**
-
-A: I'm targeting for internal use for now, with an open-source release following once I've validated it across multiple projects. I want to make sure it's genuinely useful and not just another "framework of the week."
-
-The plan is to start with the core service/action patterns, then gradually add the client magic, scheduling, and advanced features. I'd rather ship something solid and simple than something complex and buggy. And no pressure here anyone can implement this architecture on their own in any language.
-
-### 12.5 When to Use This Architecture
-
-**Q: When should I NOT use this approach?**
-
-A: Don't use this if you're building public APIs where REST conventions are expected, simple CRUD apps where REST mapping is natural, or performance-critical apps requiring HTTP caching. Also skip it if your team is already happy with GraphQL or if you're working across organizational boundaries where standards matter more than productivity.
-
-**Q: What's the migration path from existing REST APIs?**
-
-A: I recommend gradual migration:
-
-1. Start new services with REST-RPC
-2. Create adapter services wrapping existing REST endpoints
-3. Migrate high-change services first
-4. Keep stable CRUD services as-is
-5. Use an API gateway for unified interface
-
-**Q: How do you train teams on this approach?**
-
-A: I tell them "it's just POST with a standard body format" and focus on thinking in business actions rather than HTTP verbs. The learning curve is minimal since it builds on familiar HTTP concepts. Most developers get it within a day because they're already thinking in terms of functions and operations anyway.
-
-The key is showing them the `/services` endpoints for discovery and emphasizing the consistent error handling. Once they see how much boilerplate disappears, they're usually sold.
-
-**Q: What if I want to contribute to the framework development?**
-
-A: I'm always open to feedback and contributions! Right now I'm in the design and validation phase, so input on patterns, use cases, and pain points is incredibly valuable. Reason why I open-sourced it, I'll need help with a few things, client libraries for different languages, integrations with various databases and platforms, and real-world testing across different types of projects and so on.
-
-The best way to contribute right now is to try the patterns in your own projects and share what works (and what doesn't). That real-world feedback is what will make this framework genuinely useful rather than just another mental exercise.
-
-## Final Notes
-
-This is still an experimental architecture, only tested with implementation of hono js, drizzle orm, bun js, and postgres + sqlite. There may be variations in implementation depending on the framework and database used. Also Typescript and Zod for validation is strongly recommended or any other that can satisfy similar qualities of those two.
-
-## License & Contributing
-
-This architecture is still experimental and subject to change. So contributions, criticism and feedback are welcome.
+But it should be also noted that this architecture is still experimental and subject to change. So contributions, criticism and feedback are welcome.
 
 Created by [Hussein Kizz](https://github.com/Hussseinkizz) at Nile Squad Labz. Completely open source under MIT License and used in production.
-
-
